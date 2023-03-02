@@ -1,6 +1,74 @@
-[gd_scene load_steps=2 format=3 uid="uid://cvqcqh61ms3kn"]
+[gd_scene load_steps=5 format=3 uid="uid://cvqcqh61ms3kn"]
 
 [ext_resource type="Script" path="res://scripts/main.gd" id="1_8bqmw"]
+[ext_resource type="Texture2D" uid="uid://dshsji60vryp7" path="res://sprites/menubar.png" id="1_tihtc"]
+[ext_resource type="Script" path="res://scripts/ui.gd" id="2_ksb25"]
+[ext_resource type="Texture2D" uid="uid://c5jiwjapmri24" path="res://sprites/wisdom.png" id="4_mwghi"]
 
-[node name="Node2D" type="Node2D"]
+[node name="Root" type="Node2D"]
+
+[node name="World" type="Node2D" parent="."]
 script = ExtResource("1_8bqmw")
+
+[node name="CanvasLayer" type="CanvasLayer" parent="."]
+
+[node name="UI" type="Control" parent="CanvasLayer"]
+layout_direction = 2
+layout_mode = 3
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+grow_horizontal = 2
+grow_vertical = 2
+size_flags_horizontal = 4
+size_flags_vertical = 0
+script = ExtResource("2_ksb25")
+
+[node name="Panel" type="Panel" parent="CanvasLayer/UI"]
+layout_mode = 1
+anchors_preset = 10
+anchor_right = 1.0
+grow_horizontal = 2
+
+[node name="TextureRect" type="TextureRect" parent="CanvasLayer/UI/Panel"]
+layout_mode = 1
+anchors_preset = 10
+anchor_right = 1.0
+offset_bottom = 128.0
+grow_horizontal = 2
+scale = Vector2(1, 0.5)
+texture = ExtResource("1_tihtc")
+
+[node name="Wisdom" type="Control" parent="CanvasLayer/UI/Panel"]
+layout_mode = 1
+anchors_preset = 9
+anchor_bottom = 1.0
+offset_right = 200.0
+grow_vertical = 2
+
+[node name="Sprite" type="TextureRect" parent="CanvasLayer/UI/Panel/Wisdom"]
+layout_mode = 1
+anchors_preset = 9
+anchor_bottom = 1.0
+offset_right = 400.0
+offset_bottom = 400.0
+grow_vertical = 2
+scale = Vector2(0.15, 0.15)
+texture = ExtResource("4_mwghi")
+
+[node name="Text" type="Label" parent="CanvasLayer/UI/Panel/Wisdom"]
+layout_mode = 1
+anchors_preset = 11
+anchor_left = 1.0
+anchor_right = 1.0
+anchor_bottom = 1.0
+offset_left = -170.0
+offset_top = 5.0
+offset_right = -113.0
+offset_bottom = 31.0
+grow_horizontal = 0
+grow_vertical = 2
+scale = Vector2(2, 2)
+text = "Default
+"
+horizontal_alignment = 1

@@ -1,16 +1,14 @@
 class_name World
 
-var tiles
-var plains = preload("res://sprites/plains.png")
+var tiles = []
 
 func _init(x_size, y_size):
-	tiles = []
 	for i in x_size:
 		var cur = []
 		tiles.append(cur)
 		for j in y_size:
 			var tile = Tile.new()
-			tile.set_texture(plains)
+			tile.set_type('plains')
 			var scale = Vector2(2, 2)
 			tile.position = (get_hex_coord(i, j, 29, 28) * scale) + Vector2(300, 80)
 			tile.scale = scale
