@@ -1,22 +1,66 @@
 class_name World
 
+
+const TILE_WIDTH = 29
+const TILE_HEIGHT = 28
+const TILE_DEGREES = 28
+
+var width: int
+var height: int
 var tiles = []
 
-func _init(x_size, y_size):
-	for i in x_size:
+
+func _init(width_, height_):
+	width = width_
+	height = height_
+	
+	create_empty_tiles()
+	generate_terrain()
+
+
+func create_empty_tiles():
+	for i in width:
 		var cur = []
 		tiles.append(cur)
-		for j in y_size:
-			var tile = Tile.new()
-			tile.set_type('plains')
-			var scale = Vector2(2, 2)
-			tile.position = (get_hex_coord(i, j, 29, 28) * scale) + Vector2(300, 80)
-			tile.scale = scale
-			tile.rotation_degrees = 28
+		for j in height:
+			var tile = create_empty_tile(i, j)
 			cur.append(tile)
 
-func get_hex_coord(x, y, x_size, y_size):
-	var additional_x = (y % 2) * (x_size / 2)
-	var new_x = (x * x_size) + additional_x
-	var new_y = y * y_size
+
+func create_empty_tile(hex_pos_x, hex_pos_y):
+	var tile = Tile.new()
+	tile.set_type('plains') # @TODO: get rid of this
+	
+	var hex_coords = hex_to_2d(hex_pos_x, hex_pos_y, TILE_WIDTH, TILE_HEIGHT)
+	
+	tile.rotation_degrees = TILE_DEGREES
+	
+	var base_position = Vector2(300, 80)
+	var scale = Vector2(2, 2)
+	tile.position = (hex_coords * scale) + base_position
+	tile.scale = scale
+	
+	return tile
+
+
+func generate_terrain():
+	var random_points = get_random_points(10)
+	var d = Voronoi.generate_voronoi_diagram(random_points)
+	print(d)
+
+
+func get_random_points(num_points):
+	var pos = []
+	for i in num_points:
+		pos.append(Vector2(randf(), randf()))
+	return pos
+
+
+func hex_to_2d(x, y, tile_width, tile_height):
+	# Offset every other tile
+	var offset_x = (y % 2) * (tile_width / 2)
+	
+	var new_x = (x * tile_width) + offset_x
+	var new_y = y * tile_height
+	
 	return Vector2(new_x, new_y)
