@@ -33,8 +33,6 @@ static func generate_delaunay_triangulation(points):
 	
 	# Initial Convex Hull
 	var hull = get_counter_clockwise_triangle(min_cc_point, closest_point, seed_point)
-#	var final_vertices = hull.duplicate(true)
-#	var final_indices = [0, 1, 2]
 	
 	# Sort Points by Distance from the Seed Circumcircle's Circumcenter
 	var distance_to_circumcenter = func(point):
@@ -46,10 +44,28 @@ static func generate_delaunay_triangulation(points):
 #	print(hull + points)
 	
 	# Use Sorted Points to Grow Hull and Add Triangles
+	var final_vertices = hull.duplicate(true)
 	for point in points:
-		add_vertex_to_convex_hull(hull, point)
+		var visible_points = add_vertex_to_convex_hull(hull, point)
+		for i in range(len(visible_points) - 1):
+			var cur = visible_points[i]
+			var next = visible_points[i+1]
+			
+			# works for both CW and CCW order
+			final_vertices.append(point)
+			final_vertices.append(next)
+			final_vertices.append(cur)
 	
-	return null
+#	var a = []
+#	var b = [final_vertices[0], final_vertices[1], final_vertices[2]] + points
+#	print()
+#	print(b)
+#	print(final_vertices)
+#	for x in final_vertices:
+#		a.append(b.find(x))
+#	print(a)
+	
+	return final_vertices
 
 
 static func add_vertex_to_convex_hull(hull: Array, new_point:Vector2):
@@ -111,21 +127,29 @@ static func add_vertex_to_convex_hull(hull: Array, new_point:Vector2):
 	var hull_length = len(hull)
 	var i = posmod((lower_tangent_index + 1), hull_length)
 	var num_times_front_popped = 0
+	var lower_tangent = hull[lower_tangent_index]
+	var upper_tangent = hull[upper_tangent_index]
+	var visible_points = [lower_tangent] # ... [L --- H] ...  OR ---] U ... L [---
 	while i != upper_tangent_index:
 		if i > lower_tangent_index:
 			if i < upper_tangent_index: # ... L [---] U ...
-				hull.pop_at(lower_tangent_index + 1) # safe
+				var p = hull.pop_at(lower_tangent_index + 1) # safe
+				visible_points.append(p)
 			elif i > upper_tangent_index: # ... U ... L [---]
-				hull.pop_back()
-			else: # ... L U ...
-				pass
+				var p = hull.pop_back()
+				visible_points.append(p)
+			else: # i == U
+				assert(false, "Iterated to upper tangent somehow.")
 		elif i < lower_tangent_index: # [---] U ... L ...
-			hull.pop_front()
+			var p = hull.pop_front()
+			visible_points.append(p)
+			
 			num_times_front_popped += 1
 		else: # i == L
-			assert(false, "Iterated to lower tangent by mistake.")
+			assert(false, "Iterated to lower tangent somehow.")
 		
 		i = posmod((i+1), hull_length) # increment
+	visible_points.append(upper_tangent)
 	
 	# Insert New Point into Hull between the Tangents
 	var updated_lower_tangent_index = \
@@ -134,7 +158,10 @@ static func add_vertex_to_convex_hull(hull: Array, new_point:Vector2):
 	hull.insert(insert_index, new_point)
 	
 #	print("new point inserted at: ", str(insert_index))
-#	print(hull)
+#	print("hull: " + str(hull))
+#	print("visible_points: " + str(visible_points))
+
+	return visible_points
 
 
 static func get_counter_clockwise_triangle(a: Vector2, b: Vector2, c: Vector2):
