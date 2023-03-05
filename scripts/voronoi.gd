@@ -9,47 +9,143 @@ static func generate_voronoi_diagram(points):
 static func generate_delaunay_triangulation(points):
 	points = points.duplicate(true)
 	
+	# Get Seed Point
 	var seed_point = points.pop_at(0)
 	
+	# Sort Points by Distance from Seed
 	var distance_to_seed = func(point):
 		return (point - seed_point).length_squared()
 	points.sort_custom(func(a, b):
 		return distance_to_seed.call(a) < distance_to_seed.call(b))
 	
+	# Get Point Closest to Seed
 	var closest_point = points.pop_at(0)
-		
+	
+	# Sort Points by Radius of Circumcircle with Seed Point and Closest Point
 	points.sort_custom(func(a, b):
 		return calc_circumcircle_radius(a, closest_point, seed_point) \
 			< calc_circumcircle_radius(b, closest_point, seed_point))
 	
+	# Get Point that Makes the Smallest Circumcircle
 	var min_cc_point = points.pop_at(0)
+	# Get the Circumcenter for the Previous Point
+	var circumcenter = calc_circumcenter(min_cc_point, closest_point, seed_point)
 	
-	var circumcenter = calc_circumcenter(seed_point, closest_point, min_cc_point)
+	# Initial Convex Hull
+	var hull = get_counter_clockwise_triangle(min_cc_point, closest_point, seed_point)
+#	var final_vertices = hull.duplicate(true)
+#	var final_indices = [0, 1, 2]
 	
+	# Sort Points by Distance from the Seed Circumcircle's Circumcenter
 	var distance_to_circumcenter = func(point):
 		return (point - circumcenter).length_squared()
-	
 	points.sort_custom(func(a, b):
 		return distance_to_circumcenter.call(a) \
 		< distance_to_circumcenter.call(b))
 	
-	# initial convex hull
-	var convex_hull = get_clockwise_triangle(seed_point, closest_point, min_cc_point)
+#	print(hull + points)
 	
-	return convex_hull + points
+	# Use Sorted Points to Grow Hull and Add Triangles
+	for point in points:
+		add_vertex_to_convex_hull(hull, point)
+	
+	return null
 
 
-static func get_clockwise_triangle(a: Vector2, b: Vector2, c: Vector2):
-	if (b - a).angle_to(b - c) < PI:
-		return [a, c, b]
-	else:
+static func add_vertex_to_convex_hull(hull: Array, new_point:Vector2):
+	var closest_hull_point_index = null
+	var min_distance_squared = null
+	
+	# Get Point on Hull Closest to New Point
+	for i in len(hull):
+		var cur_point = hull[i]
+		var distance_squared = (cur_point - new_point).length_squared()
+		
+		if i == 0 || distance_squared < min_distance_squared:
+			min_distance_squared = distance_squared
+			closest_hull_point_index = i
+
+	"""
+	Iterates CCW or CW depending on finding upper or lower tangent.
+	Tangent is found when the angle of its direction
+	vector to the direction vector of the next point
+	flips signs.
+	This means that drawing a line between the New Point
+	and the Next Point would cross the Hull.
+	"""
+	var find_tangent_point = func(find_upper: bool):
+		var closest_hull_point = hull[closest_hull_point_index]
+		var prev_direction = (closest_hull_point - new_point)
+		
+		var hull_length = len(hull)
+		var i_count = 0 # for preventing accidental infinite loop
+		var prev_i = closest_hull_point_index
+		var i = posmod((closest_hull_point_index + (1 if find_upper else -1)),
+			hull_length) # incrementing positive is natural order (CCW)
+
+		# Iterate Until Tangent Found
+		while i_count < hull_length:
+			var cur_point = hull[i]
+			var cur_direction = (cur_point - new_point)
+			var angle = prev_direction.angle_to(cur_direction)
+			
+			if (find_upper && angle >= 0) \
+				|| (!find_upper && angle <= 0):
+				return prev_i
+			
+			prev_direction = cur_direction
+			
+			i_count += 1
+			prev_i = i
+			i = posmod((i + (1 if find_upper else -1)), hull_length)
+		assert(false, "Tangent point could not be found.")
+		
+	var upper_tangent_index = find_tangent_point.call(true)
+	var lower_tangent_index = find_tangent_point.call(false)
+	
+#	print("closest_hull_point_index: " + str(closest_hull_point_index))
+#	print("upper_tangent_index: " + str(upper_tangent_index))
+#	print("lower_tangent_index: " + str(lower_tangent_index))
+	
+	# Remove Points between the Tangents from Hull
+	var hull_length = len(hull)
+	var i = posmod((lower_tangent_index + 1), hull_length)
+	var num_times_front_popped = 0
+	while i != upper_tangent_index:
+		if i > lower_tangent_index:
+			if i < upper_tangent_index: # ... L [---] U ...
+				hull.pop_at(lower_tangent_index + 1) # safe
+			elif i > upper_tangent_index: # ... U ... L [---]
+				hull.pop_back()
+			else: # ... L U ...
+				pass
+		elif i < lower_tangent_index: # [---] U ... L ...
+			hull.pop_front()
+			num_times_front_popped += 1
+		else: # i == L
+			assert(false, "Iterated to lower tangent by mistake.")
+		
+		i = posmod((i+1), hull_length) # increment
+	
+	# Insert New Point into Hull between the Tangents
+	var updated_lower_tangent_index = \
+		lower_tangent_index - num_times_front_popped
+	var insert_index = updated_lower_tangent_index + 1
+	hull.insert(insert_index, new_point)
+	
+#	print("new point inserted at: ", str(insert_index))
+#	print(hull)
+
+
+static func get_counter_clockwise_triangle(a: Vector2, b: Vector2, c: Vector2):
+	if (b - a).angle_to(c - a) >= 0:
 		return [a, b, c]
+	else:
+		return [a, c, b]
 
 
 static func calc_circumcircle_radius(a: Vector2, b: Vector2, c: Vector2):
-	var angle = (b - a).angle_to(c - a)
-	if angle > PI:
-		angle = (2 * PI) - angle
+	var angle = abs((b - a).angle_to(c - a))
 	return (b - c).length() / (2 * sin(angle))
 
 
