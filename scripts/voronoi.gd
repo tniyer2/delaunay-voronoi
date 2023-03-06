@@ -8,6 +8,7 @@ static func generate_voronoi_diagram(points):
 # Uses Sweep Hull
 static func generate_delaunay_triangulation(points):
 	points = points.duplicate(true)
+	var points_original_length = len(points)
 	
 	# Get Seed Point
 	var seed_point = points.pop_at(0)
@@ -44,7 +45,7 @@ static func generate_delaunay_triangulation(points):
 #	print(hull + points)
 	
 	# Use Sorted Points to Grow Hull and Add Triangles
-	var final_vertices = hull.duplicate(true)
+	var triangulations = hull.duplicate(true)
 	for point in points:
 		var visible_points = add_vertex_to_convex_hull(hull, point)
 		for i in range(len(visible_points) - 1):
@@ -52,20 +53,44 @@ static func generate_delaunay_triangulation(points):
 			var next = visible_points[i+1]
 			
 			# works for both CW and CCW order
-			final_vertices.append(point)
-			final_vertices.append(next)
-			final_vertices.append(cur)
+			triangulations.append(point)
+			triangulations.append(next)
+			triangulations.append(cur)
 	
 #	var a = []
-#	var b = [final_vertices[0], final_vertices[1], final_vertices[2]] + points
+#	var b = triangulations.slice(0, 2) + points
 #	print()
 #	print(b)
-#	print(final_vertices)
-#	for x in final_vertices:
+#	print(triangulations)
+#	for x in triangulations:
 #		a.append(b.find(x))
 #	print(a)
 	
-	return final_vertices
+	var delaunay_mesh = vertices_to_vertices_and_indices(triangulations)
+	assert(len(delaunay_mesh.vertices) == points_original_length, "Invalid conversion.")
+#	print("delaunay_mesh: " + str(delaunay_mesh))
+	
+	return delaunay_mesh
+
+
+static func vertices_to_vertices_and_indices(old_vertices: Array):
+	var mesh = {}
+	mesh.vertices = []
+	mesh.indices = []
+	
+	# Iteratively add each old vertex.
+	for i in range(len(old_vertices)):
+		var vertex = old_vertices[i]
+		
+		# Use previous index if vertex already added.
+		var found_index = mesh.vertices.find(vertex)
+		if found_index == -1:
+			mesh.vertices.append(vertex)
+			mesh.indices.append(len(mesh.vertices)-1)
+		else:
+			mesh.indices.append(found_index)
+	
+	return mesh
 
 
 static func add_vertex_to_convex_hull(hull: Array, new_point:Vector2):
