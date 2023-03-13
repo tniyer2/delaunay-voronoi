@@ -120,6 +120,12 @@ class Edge:
 
 		var s = triangle_index * 3
 		return arr.slice(s, s+3)
+	
+	func _to_string():
+		var s = 'side ' + str(side_1) + ' of triangle ' + str(triangle_1_index)
+		if triangle_2_index != -1:
+			s += ', side ' + str(side_2) + ' of triangle ' + str(triangle_2_index)
+		return s
 
 
 """
@@ -319,7 +325,7 @@ static func flip_edges(triangles, edges):
 	# for every edge, flip it if it improves delaunay conditions
 	for key in edges:
 		var edge = edges[key]
-		print('edge: ' + str(edge))
+		print('edge: ' + str(key) + ' - ' + str(edge))
 		
 		# edge can't be flipped
 		if not edge.is_shared():
