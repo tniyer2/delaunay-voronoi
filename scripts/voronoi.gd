@@ -142,99 +142,112 @@ static func calc_circumcenter(a: Vector2, b: Vector2, c: Vector2):
 	return Vector2(ccx, ccy)
 
 
+"""
+Adds a 2D point to a 2D convex hull.
+This function assumes that the new point is outside of the hull and
+the hull already has at least 3 points.
+Returns a list of points on the hull that are visible to the new point.
+A point is visible if there is a straight path to it
+that doesn't intersect with the hull.
+hull: A Vector2 Array that lists the points on the hull in CCW order.
+new_point: The point to add to the hull.
+"""
 static func grow_convex_hull(hull: Array, new_point:Vector2):
-	var closest_hull_point_index = null
-	var min_distance_squared = null
+	assert(len(hull) >= 3, 'hull must have at least 3 points.')
+	
+	var closest_index
+	var min_distance_squared
 	
 	# Get Point on Hull Closest to New Point
 	for i in len(hull):
-		var cur_point = hull[i]
-		var distance_squared = (cur_point - new_point).length_squared()
+		var distance_squared = (hull[i] - new_point).length_squared()
 		
 		if i == 0 || distance_squared < min_distance_squared:
+			closest_index = i
 			min_distance_squared = distance_squared
-			closest_hull_point_index = i
-
+	
+	assert(closest_index != null, 'closest_index uninitialized.')
+	
 	"""
-	Iterates CCW or CW depending on finding upper or lower tangent.
-	Tangent is found when the angle of its direction
-	vector to the direction vector of the next point
-	flips signs.
-	This means that drawing a line between the New Point
-	and the Next Point would cross the Hull.
+	Iterates CCW if finding upper and CW if finding lower.
+	Tangent is found when drawing a line with the next point
+	intersects with the hull.
 	"""
 	var find_tangent_point = func(find_upper: bool):
-		var closest_hull_point = hull[closest_hull_point_index]
-		var prev_direction = (closest_hull_point - new_point)
+		var closest_point = hull[closest_index]
+		var prev_direction = closest_point - new_point # initial value
 		
 		var hull_length = len(hull)
-		var i_count = 0 # for preventing accidental infinite loop
-		var prev_i = closest_hull_point_index
-		var i = posmod((closest_hull_point_index + (1 if find_upper else -1)),
-			hull_length) # incrementing positive is natural order (CCW)
-
+		var i_count = 0 # to prevent infinite loop
+		var prev_i = closest_index # initial value
+		# increment (1) is natural order (probably going to be CCW)
+		var delta = 1 if find_upper else -1
+		# posmod works nicely forwards and backwards
+		var i = posmod(closest_index + delta, hull_length)
+		
 		# Iterate Until Tangent Found
 		while i_count < hull_length:
-			var cur_point = hull[i]
-			var cur_direction = (cur_point - new_point)
+			var cur_direction = hull[i] - new_point
 			var angle = prev_direction.angle_to(cur_direction)
 			
-			if (find_upper && angle >= 0) \
-				|| (not find_upper && angle <= 0):
+			# Previous Point is Tangent if Current Point Is Not Visible
+			if (find_upper && angle >= -FLOAT_EPSILON) \
+				|| (not find_upper && angle <= FLOAT_EPSILON):
 				return prev_i
 			
 			prev_direction = cur_direction
-			
 			i_count += 1
 			prev_i = i
-			i = posmod((i + (1 if find_upper else -1)), hull_length)
-		assert(false, 'Tangent point could not be found.')
+			i = posmod(i + delta, hull_length)
 		
+		assert(false, 'Tangent point could not be found.')
+	
+	# Find Both Tangents
 	var upper_tangent_index = find_tangent_point.call(true)
 	var lower_tangent_index = find_tangent_point.call(false)
 	
-#	print('closest_hull_point_index: ' + str(closest_hull_point_index))
-#	print('upper_tangent_index: ' + str(upper_tangent_index))
-#	print('lower_tangent_index: ' + str(lower_tangent_index))
-	
 	# Remove Points between the Tangents from Hull
 	var hull_length = len(hull)
-	var i = posmod((lower_tangent_index + 1), hull_length)
+	var i = posmod(lower_tangent_index+1, hull_length)
 	var num_times_front_popped = 0
-	var lower_tangent = hull[lower_tangent_index]
+	
+	var visible_points = [hull[lower_tangent_index]]
+	# needs to be retrieved before loop since indexes will change
 	var upper_tangent = hull[upper_tangent_index]
-	var visible_points = [lower_tangent] # ... [L --- H] ...  OR ---] U ... L [---
+	
+	# Iterate from Lower Tangent to Upper Tangent,
+	# Removing every Point from the Hull and Adding it to visible_points
 	while i != upper_tangent_index:
 		if i > lower_tangent_index:
-			if i < upper_tangent_index: # ... L [---] U ...
-				var p = hull.pop_at(lower_tangent_index + 1) # safe
-				visible_points.append(p)
-			elif i > upper_tangent_index: # ... U ... L [---]
-				var p = hull.pop_back()
-				visible_points.append(p)
-			else: # i == U
+			# ... L [---] U ...
+			if i < upper_tangent_index:
+				visible_points.append(hull.pop_at(lower_tangent_index+1))
+			# ... U ... L [---]
+			elif i > upper_tangent_index:
+				visible_points.append(hull.pop_back())
+			# i == U
+			else:
 				assert(false, 'Iterated to upper tangent somehow.')
-		elif i < lower_tangent_index: # [---] U ... L ...
-			var p = hull.pop_front()
-			visible_points.append(p)
-			
+		# [---] U ... L ...
+		elif i < lower_tangent_index:
+			visible_points.append(hull.pop_front())
 			num_times_front_popped += 1
-		else: # i == L
+		# i == L
+		else:
 			assert(false, 'Iterated to lower tangent somehow.')
 		
-		i = posmod((i+1), hull_length) # increment
+		i = posmod(i+1, hull_length) # increment
+	
 	visible_points.append(upper_tangent)
 	
-	# Insert New Point into Hull between the Tangents
-	var updated_lower_tangent_index = \
-		lower_tangent_index - num_times_front_popped
-	var insert_index = updated_lower_tangent_index + 1
-	hull.insert(insert_index, new_point)
+	# update L since popping the front moves it down
+	# * means popped index, *** L U ... or *** U ... L
+	# we won't update U because we don't need U
+	lower_tangent_index -= num_times_front_popped
 	
-#	print('new point inserted at: ', str(insert_index))
-#	print('hull: ' + str(hull))
-#	print('visible_points: ' + str(visible_points))
-
+	# Insert New Point into the Hull between the Tangents
+	hull.insert(lower_tangent_index+1, new_point)
+	
 	return visible_points
 
 
@@ -367,7 +380,7 @@ static func get_edges(triangles):
 
 
 """
-This function flips all of the edges in a 2D geometry
+Flips all of the edges in a 2D geometry
 so that it is a valid delanauy triangulation.
 triangles: 2D geometry (in indexed format) to flip.
 edges: dictionary of edges for the 2D geometry.
@@ -402,7 +415,7 @@ static func flip_edges(triangles, edges):
 			vertices.append(triangles.vertices[i])
 		
 		return {'vertices': vertices, 'indices': indices}
-
+	
 	"""
 	Returns the distance of point d from the circumcircle of a, b, and c.
 	A positive value is inside the circle, a zero value is on the edge,
@@ -414,7 +427,7 @@ static func flip_edges(triangles, edges):
 		var radius = calc_circumcircle_radius(a, b, c)
 		var distance_from_center = (circumcenter - d).length()
 		return radius - distance_from_center
-
+	
 	"""
 	Returns true if flipping an edge improves delanauy conditions.
 	quad: The quad of the edge's adjacent triangles.
@@ -438,21 +451,13 @@ static func flip_edges(triangles, edges):
 
 		# should flip only if it moves point from inside circle to outside
 		return cur_distance > 0 && distance_if_flipped <= 0
-
-	"""
-	Updates the triangle info for 1 of the triangles of an edge.
-	a and b: Indexes of the 2 vertices in the edge.
-	triangle_index: Index of the first vertex divided by 3 of
-		the triangle to replace.
-	new_triangle_index: Index of the first vertex divided by 3 of
-		the triangle to replace with.
 	
-	"
-	Updates the info for one of the triangles of an edge.
-	a and b: The indices of the 2 vertices of an edge.
-	triangle_index: The index of the triangle's first vertex divided by 3
+	"""
+	Updates an edge's triangle info for 1 of its triangles.
+	a and b: Indices of the 2 vertices of an edge.
+	triangle_index: Index of the first vertex divided by 3
 		of the triangle to replace.
-	new_triangle_index: The index of the triangle's first vertex divided by 3
+	new_triangle_index: Index of the first vertex divided by 3
 		of the triangle to replace with.
 	new_side: The side (0, 1, or 2) of the new triangle that the edge is on.
 	"""
@@ -511,7 +516,7 @@ static func flip_edges(triangles, edges):
 		update_triangle_info_in_edge.call(qB, qC, t1, t2, 1)
 		update_triangle_info_in_edge.call(qC, qD, t2, t2, 2)
 		update_triangle_info_in_edge.call(qD, qA, t2, t1, 2)
-
+	
 	# for every edge, flip it if it improves delaunay conditions
 	for key in edges:
 		var edge = edges[key]
