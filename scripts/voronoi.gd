@@ -7,7 +7,11 @@ static func generate_voronoi_diagram(points):
 	return generate_delaunay_triangulation(points)
 
 
-# Uses Sweep Hull
+"""
+Generates a Delanauy Triangulation of a set of points
+using the Sweep Hull algorithm.
+points: The points to find the delanauy triangulation of.
+"""
 static func generate_delaunay_triangulation(points):
 	var original_points_length = len(points)
 #	print('original points: ' + str(points))
@@ -77,29 +81,65 @@ static func generate_delaunay_triangulation(points):
 	return triangles
 
 
+"""
+Returns a 3-length array of Vector2 positions in CCW order.
+Returns null if degenerate case and no order can be determined.
+a, b, and c: Vector2 positions to order.
+"""
 static func get_counter_clockwise_triangle(a: Vector2, b: Vector2, c: Vector2):
-	if (b - a).angle_to(c - a) >= 0:
+	var angle = (b - a).angle_to(c - a)
+	
+	# ac and ab point in opposite directions
+	if abs(angle) >= PI - FLOAT_EPSILON:
+		return null
+	elif angle > FLOAT_EPSILON: # ac CCW to ab
 		return [a, b, c]
-	else:
+	elif angle < FLOAT_EPSILON: # ac CW to ab
 		return [a, c, b]
+	else: # angle is 0, ac and ab point in same direction
+		return null
 
 
+"""
+Returns the radius of the circumcircle that any 3 2D points lie on.
+Returns null if degenerate case.
+a, b, and c: The points that lie on the circumcircle.
+"""
 static func calc_circumcircle_radius(a: Vector2, b: Vector2, c: Vector2):
 	var angle = abs((b - a).angle_to(c - a))
-	return (b - c).length() / (2 * sin(angle))
+	
+	var numerator = (b - c).length()
+	var denominator = 2 * sin(angle)
+	if abs(numerator) <= FLOAT_EPSILON or abs(denominator) <= FLOAT_EPSILON:
+		return null
+		
+	var r = numerator / denominator
+	if abs(r) <= FLOAT_EPSILON:
+		return null
+	
+	return r
 
 
+"""
+Returns the center of the circumcircle that any 3 2D points lie on.
+Returns null if degenerate case.
+a, b, and c: The points that lie on the circumcircle.
+"""
 static func calc_circumcenter(a: Vector2, b: Vector2, c: Vector2):
-	var d = 2 * (a.x * (b.y - c.y) + b.x * (c.y - a.y) + c.x * (a.y - b.y))
+	var d = 2 * ((a.x * (b.y-c.y)) + (b.x * (c.y-a.y)) + (c.x * (a.y-b.y)))
+	
+	# degenerate case, points line up or 2 or all are the same.
+	if abs(d) <= FLOAT_EPSILON:
+		return null
 	
 	var al = a.length_squared()
 	var bl = b.length_squared()
 	var cl = c.length_squared()
 	
-	var cx = (al * (b.y - c.y) + bl * (c.y - a.y) + cl * (a.y - b.y)) / d
-	var cy = (al * (c.x - b.x) + bl * (a.x - c.x) + cl * (b.x - a.x)) / d
+	var ccx = ((al * (b.y-c.y)) + (bl * (c.y-a.y)) + (cl * (a.y-b.y))) / d
+	var ccy = ((al * (c.x-b.x)) + (bl * (a.x-c.x)) + (cl * (b.x-a.x))) / d
 	
-	return Vector2(cx, cy)
+	return Vector2(ccx, ccy)
 
 
 static func grow_convex_hull(hull: Array, new_point:Vector2):
@@ -198,21 +238,30 @@ static func grow_convex_hull(hull: Array, new_point:Vector2):
 	return visible_points
 
 
+"""
+Returns the indexed format of a 2D or 3D Geometry.
+The indexed format consists of a vector array of vertex positions
+with an array defining triangles by referencing vertices by index.
+old_vertices: The vector array of positions to be converted.
+"""
 static func convert_to_indexed_triangles(old_vertices: Array):
 	var vertices = []
 	var indices = []
 	
-	# Iteratively add each old vertex.
-	for i in range(len(old_vertices)):
-		var vertex = old_vertices[i]
-		
-		# Use previous index if vertex already added.
-		var found_index = vertices.find(vertex)
-		if found_index == -1:
-			vertices.append(vertex)
-			indices.append(len(vertices)-1)
+	# stores an added vertex with its index in vertices
+	var added_locs = {}
+	
+	# Iteratively Process Each Vertex to Convert
+	for vertex in old_vertices:
+		if vertex in added_locs:
+			var loc = added_locs[vertex]
+			indices.append(loc)
 		else:
-			indices.append(found_index)
+			vertices.append(vertex)
+			
+			var loc = len(vertices) - 1 # last index
+			added_locs[vertex] = loc
+			indices.append(loc)
 	
 	return {'vertices': vertices, 'indices': indices}
 
