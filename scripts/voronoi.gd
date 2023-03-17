@@ -3,6 +3,11 @@ class_name Voronoi extends Object
 const FLOAT_EPSILON = 0.00001
 
 
+"""
+Generates a Voronoi Diagram of a set of points by
+taking the Dual Graph of its Delaunay Triangulation.
+points: A set of points.
+"""
 static func generate_voronoi_diagram(points):
 	return generate_delaunay_triangulation(points)
 
@@ -70,13 +75,16 @@ static func generate_delaunay_triangulation(points):
 	triangles = convert_to_indexed_triangles(triangles)
 	assert(len(triangles.vertices) == original_points_length,
 		'Conversion to Indexed Format Failed.')
-	print('vertices: ' + str(triangles.vertices))
-	print('triangles: ' + str(triangles.indices))
+	
+	print('non-overlapping triangles:\n'\
+		+ get_indexed_geometry_json(triangles))
 	
 	var edges = get_edges(triangles)
 	print('edges: ' + str(edges) + '\n')
 	flip_edges(triangles, edges)
-	print('flipped triangles: ' + str(triangles.indices))
+	
+	print('flipped triangles:\n'\
+		+ get_indexed_geometry_json(triangles))
 	
 	return triangles
 
@@ -158,7 +166,7 @@ static func grow_convex_hull(hull: Array, new_point:Vector2):
 	var closest_index
 	var min_distance_squared
 	
-	# Get Point on Hull Closest to New Point
+	# Find Point on Hull Closest to New Point
 	for i in len(hull):
 		var distance_squared = (hull[i] - new_point).length_squared()
 		
@@ -173,80 +181,73 @@ static func grow_convex_hull(hull: Array, new_point:Vector2):
 	Tangent is found when drawing a line with the next point
 	intersects with the hull.
 	"""
-	var find_tangent_point = func(find_upper: bool):
+	var find_tangent_point_index = func(find_upper: bool):
 		var closest_point = hull[closest_index]
 		var prev_direction = closest_point - new_point # initial value
 		
 		var hull_length = len(hull)
 		var i_count = 0 # to prevent infinite loop
 		var prev_i = closest_index # initial value
-		# increment (1) is natural order (probably going to be CCW)
+		# increment goes in natural order (will probably be CCW)
 		var delta = 1 if find_upper else -1
-		# posmod works nicely forwards and backwards
+		# posmod works nicely both forwards and backwards
 		var i = posmod(closest_index + delta, hull_length)
 		
-		# Iterate Until Tangent Found
+		# Iterates CCW/CW through hull until tangent is found
+		# tangent is found when cur_point is the last visible point
 		while i_count < hull_length:
-			var cur_direction = hull[i] - new_point
+			var cur_point = hull[i]
+			var cur_direction = cur_point - new_point
 			var angle = prev_direction.angle_to(cur_direction)
 			
-			# Previous Point is Tangent if Current Point Is Not Visible
+			# if cur_point not visible, previous point was tangent
 			if (find_upper && angle >= -FLOAT_EPSILON) \
 				|| (not find_upper && angle <= FLOAT_EPSILON):
 				return prev_i
 			
+			# tangent not found, increment to next point
 			prev_direction = cur_direction
 			i_count += 1
 			prev_i = i
 			i = posmod(i + delta, hull_length)
 		
 		assert(false, 'Tangent point could not be found.')
+		return -1
 	
 	# Find Both Tangents
-	var upper_tangent_index = find_tangent_point.call(true)
-	var lower_tangent_index = find_tangent_point.call(false)
+	var L = find_tangent_point_index.call(false)
+	var U = find_tangent_point_index.call(true)
 	
-	# Remove Points between the Tangents from Hull
-	var hull_length = len(hull)
-	var i = posmod(lower_tangent_index+1, hull_length)
-	var num_times_front_popped = 0
+	var visible_points = [hull[L]]
+	var upper_tangent = hull[U] # don't move this line, U changes after loop
 	
-	var visible_points = [hull[lower_tangent_index]]
-	# needs to be retrieved before loop since indexes will change
-	var upper_tangent = hull[upper_tangent_index]
-	
-	# Iterate from Lower Tangent to Upper Tangent,
-	# Removing every Point from the Hull and Adding it to visible_points
-	while i != upper_tangent_index:
-		if i > lower_tangent_index:
-			# ... L [---] U ...
-			if i < upper_tangent_index:
-				visible_points.append(hull.pop_at(lower_tangent_index+1))
-			# ... U ... L [---]
-			elif i > upper_tangent_index:
-				visible_points.append(hull.pop_back())
-			# i == U
-			else:
-				assert(false, 'Iterated to upper tangent somehow.')
-		# [---] U ... L ...
-		elif i < lower_tangent_index:
-			visible_points.append(hull.pop_front())
-			num_times_front_popped += 1
-		# i == L
-		else:
-			assert(false, 'Iterated to lower tangent somehow.')
+	# Remove All Points between the Tangents,
+	# Adding them to Visible Points,
+	# and Insert a New Point in between.
+	if L <= U:
+		# Result: . . . L x x x U . . .
+		for _i in range((U-L) - 1):
+			visible_points.append(
+				hull.pop_at(L+1))
 		
-		i = posmod(i+1, hull_length) # increment
+		# Result: . . . L New_Point U . . .
+		hull.insert(L+1, new_point)
+	else:
+		# Result: . . . U . . . L x x x
+		for _i in range((len(hull)-L) - 1):
+			# don't change to pop_back(), otherwise order will get messed up
+			visible_points.append(
+				hull.pop_at(L+1))
+		
+		# Result: . . . U . . . L New_Point
+		hull.insert(L+1, new_point)
+		
+		# Result: x x x U . . . L New_Point
+		for _i in range(U):
+			visible_points.append(
+				hull.pop_at(0))
 	
 	visible_points.append(upper_tangent)
-	
-	# update L since popping the front moves it down
-	# * means popped index, *** L U ... or *** U ... L
-	# we won't update U because we don't need U
-	lower_tangent_index -= num_times_front_popped
-	
-	# Insert New Point into the Hull between the Tangents
-	hull.insert(lower_tangent_index+1, new_point)
 	
 	return visible_points
 
@@ -551,11 +552,19 @@ static func is_quadrilateral_convex(quad: Array):
 		var b = quad[(i+1) % 4]
 		var c = quad[(i+2) % 4]
 
-		# angle should be less than 180 degrees,
-		#	but more than 0,
-		# 	in the range of [0, PI) and not in [-PI, 0]
+		# angle should be less than 180 degrees, but more than 0.
+		# 	it must be positive and not close to 0, PI, or -PI.
 		var angle = (c - b).angle_to(a - b)
 		if angle <= FLOAT_EPSILON or angle >= PI - FLOAT_EPSILON:
 			return false
 	
 	return true
+
+
+static func get_indexed_geometry_json(d):
+	var vertices = []
+	for v in d.vertices:
+		vertices.append(v.x)
+		vertices.append(v.y)
+	
+	return JSON.stringify({'vertices': vertices, 'indices': d.indices})

@@ -44,8 +44,11 @@ func create_empty_tile(hex_pos_x, hex_pos_y):
 
 
 func generate_terrain():
-	seed(828394)
-	var random_points = get_random_points(10)
+#	seed(828394)
+#	seed(23849)
+#	seed(29838)
+	seed(672058)
+	var random_points = get_random_points(20)
 	var _d = Voronoi.generate_voronoi_diagram(random_points)
 
 
