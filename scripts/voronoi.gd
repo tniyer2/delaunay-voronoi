@@ -25,16 +25,13 @@ static func generate_delaunay_triangulation(points):
 	var seed_point = points.pop_at(0)
 	
 	# Get Point Closest to Seed
-	var distance_to_seed = func(point):
-		return (point - seed_point).length_squared()
-	points.sort_custom(func(a, b):
-		return distance_to_seed.call(a) < distance_to_seed.call(b))
+	points = Util.sort_array(points, func(point):
+		return (point - seed_point).length_squared())
 	var closest_point = points.pop_at(0)
 	
 	# Get Point that Makes the Smallest Circumcircle
-	points.sort_custom(func(a, b):
-		return calc_circumcircle_radius(a, closest_point, seed_point) \
-			< calc_circumcircle_radius(b, closest_point, seed_point))
+	points = Util.sort_array(points, func(point):
+		return calc_circumcircle_radius(point, closest_point, seed_point))
 	var min_cc_point = points.pop_at(0)
 	
 	# Get the Circumcenter of the Smallest Circumcircle
@@ -46,11 +43,8 @@ static func generate_delaunay_triangulation(points):
 		min_cc_point, closest_point, seed_point)
 	
 	# Sort Points by Distance from the Smallest Circumcircle's Circumcenter
-	var distance_to_circumcenter = func(point):
-		return (point - circumcenter).length_squared()
-	points.sort_custom(func(a, b):
-		return distance_to_circumcenter.call(a) \
-			< distance_to_circumcenter.call(b))
+	points = Util.sort_array(points, func(point):
+		return (point - circumcenter).length_squared())
 	
 	# first triangle is initial hull (contains 3 points)
 	var triangles = hull.duplicate(true)
@@ -75,14 +69,14 @@ static func generate_delaunay_triangulation(points):
 		'Conversion to Indexed Format Failed.')
 	
 	print('non-overlapping triangles:\n'\
-		+ get_indexed_geometry_json(triangles))
+		+ get_indexed_geometry_json(triangles) + '\n')
 	
 	var edges = get_edges(triangles)
 	print('edges: ' + str(edges) + '\n')
 	
 	flip_edges(triangles, edges)
 	print('flipped triangles:\n'\
-		+ get_indexed_geometry_json(triangles))
+		+ get_indexed_geometry_json(triangles) + '\n')
 	
 	return triangles
 
