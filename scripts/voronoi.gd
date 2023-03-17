@@ -19,8 +19,6 @@ points: The points to find the delanauy triangulation of.
 """
 static func generate_delaunay_triangulation(points):
 	var original_points_length = len(points)
-#	print('original points: ' + str(points))
-	
 	points = points.duplicate(true)
 	
 	# Get Seed Point
@@ -81,8 +79,8 @@ static func generate_delaunay_triangulation(points):
 	
 	var edges = get_edges(triangles)
 	print('edges: ' + str(edges) + '\n')
-	flip_edges(triangles, edges)
 	
+	flip_edges(triangles, edges)
 	print('flipped triangles:\n'\
 		+ get_indexed_geometry_json(triangles))
 	
@@ -333,12 +331,10 @@ class Edge:
 
 
 """
-Returns a dictionary containing the edges of all of the triangles.
-Each edge is stored as an Edge object that is
-shared between adjacent triangles.
-The key is an array containing the indexes of the two vertices of the edge.
-The order of the indexes in the key is arbitrary.
-triangles: the triangles (in indexed format) to retrieve edges from.
+Returns a dictionary of the edges in a 2D geometry.
+The key is an array containing the indices of the 2 vertices of the edge.
+The order of the indices in the key is arbitrary.
+triangles: a 2D geometry (in indexed format) to get the edges of.
 """
 static func get_edges(triangles):
 	var edges = {}
@@ -388,29 +384,29 @@ edges: dictionary of edges for the 2D geometry.
 """
 static func flip_edges(triangles, edges):
 	"""
-	Returns a geometry with 4 points (in indexed format)
-	made from the 2 adjacent triangles of an edge.
+	Uses the 2 adjacent triangles of a shared edge in order to
+	return the combined 4-sided shape.
 	edge: An edge shared by 2 adjacent triangles.
 	"""
 	var get_quad = func(edge):
-		# Get the Adjacent Triangles
+		assert(edge.is_shared(), 'Invalid argument. edge must be shared.')
+		
+		# Get the 2 Adjacent Triangles
 		var t1 = edge.get_triangle_1(triangles.indices)
-		print('first triangle: ' + str(t1))
 		var t2 = edge.get_triangle_2(triangles.indices)
-		print('second triangle: ' + str(t2))
 		
-		# Make The Indices for the Vertices of the Quad
 		# If edge is (A,B), then quad is (B,C,A,D),
-		# where C is in t1 and D in t2
 		var indices = [
-			t1[(edge.side_1+1) % 3],
-			t1[(edge.side_1+2) % 3],
-			t1[edge.side_1],
-			t2[(edge.side_2+2) % 3]
+			# In Triangle 1
+			t1[(edge.side_1 + 1) % 3], # B (shared with Triangle 2)
+			t1[(edge.side_1 + 2) % 3], # C
+			t1[edge.side_1],           # A (shared with Triangle 2)
+			
+			# In Triangle 2
+			t2[(edge.side_2 + 2) % 3]  # D
 		]
-		print('quad: ' + str(indices))
 		
-		# Get the Quad's Vertices from the Indices
+		# get respective vertices for convenience
 		var vertices = []
 		for i in indices:
 			vertices.append(triangles.vertices[i])
@@ -418,15 +414,18 @@ static func flip_edges(triangles, edges):
 		return {'vertices': vertices, 'indices': indices}
 	
 	"""
-	Returns the distance of point d from the circumcircle of a, b, and c.
-	A positive value is inside the circle, a zero value is on the edge,
-	and a negative value is outside the circle.
+	Returns the distance of d from the circumcircle of a, b, and c.
+	A positive value means d is inside the circle,
+	a value of 0 means d is on the edge,
+	and a negative value means d is outside the circle.
 	"""
 	var get_distance_from_circumcircle = func(
 		a: Vector2, b: Vector2, c: Vector2, d: Vector2):
 		var circumcenter = calc_circumcenter(a, b, c)
-		var radius = calc_circumcircle_radius(a, b, c)
 		var distance_from_center = (circumcenter - d).length()
+		
+		var radius = calc_circumcircle_radius(a, b, c)
+		
 		return radius - distance_from_center
 	
 	"""
@@ -439,17 +438,14 @@ static func flip_edges(triangles, edges):
 		var b = quad.vertices[1]
 		var c = quad.vertices[2]
 		var d = quad.vertices[3]
-
+		
 		# Edge Cannot be Flipped if Quad is Concave
 		if not is_quadrilateral_convex(quad.vertices):
-			print('Quadrilateral is not convex.')
 			return false
-
+		
 		var cur_distance = get_distance_from_circumcircle.call(a, b, c, d)
-		print('cur_distance: ' + str(cur_distance))
 		var distance_if_flipped = get_distance_from_circumcircle.call(b, d, a, c)
-		print('distance_if_flipped: ' + str(distance_if_flipped))
-
+		
 		# should flip only if it moves point from inside circle to outside
 		return cur_distance > 0 && distance_if_flipped <= 0
 	
@@ -457,9 +453,9 @@ static func flip_edges(triangles, edges):
 	Updates an edge's triangle info for 1 of its triangles.
 	a and b: Indices of the 2 vertices of an edge.
 	triangle_index: Index of the first vertex divided by 3
-		of the triangle to replace.
+	of the triangle to replace.
 	new_triangle_index: Index of the first vertex divided by 3
-		of the triangle to replace with.
+	of the triangle to replace with.
 	new_side: The side (0, 1, or 2) of the new triangle that the edge is on.
 	"""
 	var update_triangle_info_in_edge = func(
@@ -482,50 +478,55 @@ static func flip_edges(triangles, edges):
 			edge.side_2 = new_side
 	
 	"""
-	Flips an edge by replacing it's adjacent triangles
-	with different triangles.
-	Then updates edges to match the new geometry.
+	Flips an edge by replacing its 2 adjacent triangles
+	with the 2 alternate triangles.
+	Then updates edges to match the changed geometry.
 	quad: The quad of the edge's adjacent triangles.
 	edge: The edge to flip.
 	"""
 	var flip_edge = func(quad, edge):
-		var qA = quad.indices[0]
-		var qB = quad.indices[1]
-		var qC = quad.indices[2]
-		var qD = quad.indices[3]
+		var qA = quad.indices[0] # was B
+		var qB = quad.indices[1] # was D
+		var qC = quad.indices[2] # was A
+		var qD = quad.indices[3] # was C
 		
 		var t1 = edge.triangle_1_index
 		var t2 = edge.triangle_2_index
 		
 		# Replace First Triangle
-		triangles.indices[t1*3] = qA
-		triangles.indices[(t1*3) + 1] = qB
-		triangles.indices[(t1*3) + 2] = qD
+		triangles.indices[t1 * 3] = qA
+		triangles.indices[(t1 * 3) + 1] = qB
+		triangles.indices[(t1 * 3) + 2] = qD
 		
 		# Replace Second Triangle
-		triangles.indices[t2*3] = qD
-		triangles.indices[(t2*3) + 1] = qB
-		triangles.indices[(t2*3) + 2] = qC
+		triangles.indices[t2 * 3] = qD
+		triangles.indices[(t2 * 3) + 1] = qB
+		triangles.indices[(t2 * 3) + 2] = qC
 		
-		# Remove Old Edge
+		# Remove Old Edge, previously (A,B)
 		edges[[qC, qA]] = null
-		# Add the New Flipped Edge
+		# Add the New Flipped Edge, previously (D,C)
 		edges[[qB, qD]] = Edge.new(t1, 1, t2, 0)
 		
-		# Update Each of the 4 Edges of the Quad
-		update_triangle_info_in_edge.call(qA, qB, t1, t1, 0)
-		update_triangle_info_in_edge.call(qB, qC, t1, t2, 1)
-		update_triangle_info_in_edge.call(qC, qD, t2, t2, 2)
-		update_triangle_info_in_edge.call(qD, qA, t2, t1, 2)
+		# Update Each of the 4 Sides (edges) of the Quad
+		# The triangles they are adjacent to
+		# and their side on that triangle has changed
+		update_triangle_info_in_edge.call(
+			qA, qB, t1, t1, 0) # previously (B, D)
+		update_triangle_info_in_edge.call(
+			qB, qC, t1, t2, 1) # previously (D, A)
+		update_triangle_info_in_edge.call(
+			qC, qD, t2, t2, 2) # previously (A, C)
+		update_triangle_info_in_edge.call(
+			qD, qA, t2, t1, 2) # previously (C, B)
 	
 	# for every edge, flip it if it improves delaunay conditions
 	for key in edges:
 		var edge = edges[key]
-		print('edge: ' + str(key) + ' - ' + str(edge))
+#		print('edge: ' + str(key) + ' - ' + str(edge))
 		
 		# edge can't be flipped
 		if not edge.is_shared():
-			print('skipping edge, not shared')
 			continue
 		
 		# the combined shape of the edge's 2 adjacent triangles
@@ -533,8 +534,6 @@ static func flip_edges(triangles, edges):
 		
 		if should_flip.call(quad):
 			flip_edge.call(quad, edge)
-			print('flipped edge')
-		print()
 
 
 """
@@ -561,10 +560,17 @@ static func is_quadrilateral_convex(quad: Array):
 	return true
 
 
-static func get_indexed_geometry_json(d):
-	var vertices = []
-	for v in d.vertices:
-		vertices.append(v.x)
-		vertices.append(v.y)
+"""
+Returns a JSON string of an indexed 2D geometry.
+geometry: A 2D geometry in indexed format.
+"""
+static func get_indexed_geometry_json(geometry):
+	var flattened_vertices = []
+	for v in geometry.vertices:
+		flattened_vertices.append(v.x)
+		flattened_vertices.append(v.y)
 	
-	return JSON.stringify({'vertices': vertices, 'indices': d.indices})
+	return JSON.stringify({
+		'vertices': flattened_vertices,
+		'indices': geometry.indices
+	})
