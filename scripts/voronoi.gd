@@ -9,7 +9,19 @@ taking the Dual Graph of its Delaunay Triangulation.
 points: A set of points.
 """
 static func generate_voronoi_diagram(points):
-	return generate_delaunay_triangulation(points)
+	var triangles = generate_delaunay_triangulation(points)
+	var edges = get_edges(triangles)
+	
+	var circumcenters = []
+	for i in range(0, len(triangles.indices), 3):
+		var a = triangles.get_vertex(i)
+		var b = triangles.get_vertex(i+1)
+		var c = triangles.get_vertex(i+2)
+		
+		var circumcenter = calc_circumcenter(a, b, c)
+		circumcenters.append(circumcenter)
+	
+	return triangles
 
 
 """
@@ -18,6 +30,8 @@ using the Sweep Hull algorithm.
 points: The points to find the delanauy triangulation of.
 """
 static func generate_delaunay_triangulation(points):
+	assert(len(points) >= 3, 'points must be at least length 3.')
+	
 	var original_points_length = len(points)
 	points = points.duplicate(true)
 	
@@ -69,14 +83,14 @@ static func generate_delaunay_triangulation(points):
 		'Conversion to Indexed Format Failed.')
 	
 	print('non-overlapping triangles:\n'\
-		+ get_indexed_geometry_json(triangles) + '\n')
+		+ get_geometry_json(triangles) + '\n')
 	
 	var edges = get_edges(triangles)
 	print('edges: ' + str(edges) + '\n')
 	
 	flip_edges(triangles, edges)
 	print('flipped triangles:\n'\
-		+ get_indexed_geometry_json(triangles) + '\n')
+		+ get_geometry_json(triangles) + '\n')
 	
 	return triangles
 
@@ -245,6 +259,27 @@ static func grow_convex_hull(hull: Array, new_point:Vector2):
 
 
 """
+Represents a 2D or 3D euclidean geometry made of triangles.
+Stores the vertices of the geometry in an array.
+Stores the triangles as indices referring to the points.
+"""
+class Geometry:
+	var vertices: Array
+	var indices: Array
+	
+	func _init(vertices_: Array, indices_: Array):
+		vertices = vertices_
+		indices = indices_
+	
+	"""
+	Returns the Vector position of a vertex given its index in triangles.
+	"""
+	func get_vertex(index: int):
+		assert(index >= 0 and index < len(indices), 'index out of bounds')
+		return vertices[indices[index]]
+
+
+"""
 Returns the indexed format of a 2D or 3D Geometry.
 The indexed format consists of a vector array of vertex positions
 with an array defining triangles by referencing vertices by index.
@@ -269,7 +304,7 @@ static func convert_to_indexed_triangles(old_vertices: Array):
 			added_locs[vertex] = loc
 			indices.append(loc)
 	
-	return {'vertices': vertices, 'indices': indices}
+	return Geometry.new(vertices, indices)
 
 
 """
@@ -558,7 +593,7 @@ static func is_quadrilateral_convex(quad: Array):
 Returns a JSON string of an indexed 2D geometry.
 geometry: A 2D geometry in indexed format.
 """
-static func get_indexed_geometry_json(geometry):
+static func get_geometry_json(geometry):
 	var flattened_vertices = []
 	for v in geometry.vertices:
 		flattened_vertices.append(v.x)
